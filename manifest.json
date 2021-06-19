@@ -1,0 +1,10 @@
+{
+	"id": "obsidian-habit-tracker",
+	"name": "Habit Tracker",
+	"version": "1.0.0",
+	"minAppVersion": "0.9.12",
+	"description": "This plguin creates a simple Month view for visualizing your punch records.",
+	"author": "Duo",
+	"authorUrl": "https://obsidian.md/about",
+	"isDesktopOnly": false
+}
