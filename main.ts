@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, MarkdownRenderChild, moment } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, moment } from 'obsidian';
 
 interface HabitTrackerPluginSettings {
 	startOfWeek: string;
@@ -35,7 +35,7 @@ export default class HabitTrackerPlugin extends Plugin {
 		this.addSettingTab(new HabitTrackerSettingTab(this.app, this));
 
 		this.registerMarkdownCodeBlockProcessor('habitt', (source, el, ctx) => {
-			ctx.addChild(new HabitTrackerMonthViewRenderer(source, el, this))
+			el.innerHTML = renderTable(source, this);
 		})
 	}
 
@@ -48,115 +48,146 @@ export default class HabitTrackerPlugin extends Plugin {
 	}
 }
 
-class HabitTrackerMonthViewRenderer extends MarkdownRenderChild {
+interface HabitTrackerContext {
 	startOfWeek: number;
 	startDay: number;
 	monthDays: number;
 	displayMonth: string;
+	tableWidth: String,
 	marks: Map<number, string>;
-	tableWidth: String
+	settings: HabitTrackerPluginSettings,
+	error: String
+}
 
-	constructor(public source: string, container: HTMLElement, public plugin: HabitTrackerPlugin) {
-		super(container)
+function renderTable (source: string, plugin: HabitTrackerPlugin) {
+	const { settings } = plugin;
+	const ctx = parseContext(source, settings);
+
+	if (ctx.error) {
+		return `<div class="habitt-error">${ctx.error}</div>`;
 	}
 
-	async onload () {
-		this.parse(this.source);
-		this.render();
-	}
-	parse(source: string) {
-		this.startOfWeek = parseInt(this.plugin.settings.startOfWeek, 10);
-		// month
-		const m = source.match(/\[month:(.*?)\]/)
-		if (m && m[1]) {
-			const mon = moment(m[1]);
-			this.displayMonth = mon.format(this.plugin.settings.monthFormat);
-			this.startDay = mon.startOf('month').day();
-			this.monthDays = mon.endOf('month').date();
-		} else {
-			throw new Error('Fail: Month not found. e.g. [2021-01-15]')
-		}
+	const head = renderHead(ctx);
+	const body = renderBody(ctx);
+	const styles = ctx.tableWidth ? `width: ${ctx.tableWidth};` : '';
 
-		const wm = source.match(/\[width:(.*?)\]/)
-		if (wm && wm[1]) {
-			this.tableWidth = wm[1];
-		}
-		const dm = source.match(/\((.*?)\)/g)
-		if (dm && dm.length) {
-			const marks = new Map<number, string>()
-			dm.forEach(t => {
-				const m = t.match(/\((.*?)(,(.*?))?\)/)
-				if (m) {
-					const date = parseInt(m[1], 10)
-					const tag = m[3]
-					marks.set(date, tag);//[date] = tag
-				}
-			})
-			this.marks = marks
+	return `<table class="habitt" style="${styles}">${head}${body}</table>`;
+}
+
+function parseContext(source: string, settings: HabitTrackerPluginSettings): HabitTrackerContext {
+	const ctx: HabitTrackerContext = {
+		startOfWeek: parseInt(settings.startOfWeek, 10),
+		startDay: 0,
+		monthDays: 0,
+		displayMonth: '',
+		tableWidth: '',
+		marks: new Map<number, string>(),
+		settings,
+		error: ''
+	};
+
+	// month
+	const m = source.match(/\[month:\s*(\S*?)\s*\]/);
+	if (!m || !m[1]) {
+		ctx.error = 'Fail: Month not found. e.g. [month: 2021-01]';
+		return ctx;
+	}
+
+	const mon = moment(m[1]);
+	if (!mon.isValid()) {
+		ctx.error = `Fail: Invalid Date ${m[0]}`;
+		return ctx;
+	}
+
+	ctx.displayMonth = mon.format(settings.monthFormat);
+	ctx.startDay = mon.startOf('month').day();
+	ctx.monthDays = mon.endOf('month').date();
+	
+	// table width (optional)
+	const wm = source.match(/\[width:\s*(\S*?)\s*\]/);
+	if (wm && wm[1]) {
+		ctx.tableWidth = wm[1];
+	}
+
+	// punch in
+	const pm = source.match(/\((.*?)\)/g);
+	if (pm && pm.length) {
+		pm.forEach(t => {
+			const m = t.match(/\((.*?)(,(.*?))?\)/);
+			if (m) {
+				const date = parseInt(m[1], 10);
+				const tag = m[3];
+				ctx.marks.set(date, tag);
+			}
+		});
+	}
+
+	return ctx;
+}
+
+function renderHead (ctx: HabitTrackerContext) {
+	const { Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday } = ctx.settings;
+	const WEEK = [Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday];
+	
+	const arr = ['<thead>'];
+	
+	if (ctx.settings.displayHead) {
+		arr.push(`<tr><th colspan="7" class="habitt-head">${ctx.displayMonth}</th></tr>`);
+	}
+
+	arr.push(`<tr>`);
+	for (var i = 0; i < 7; i++) {
+		arr.push(`<th class="habitt-th habitt-th-${i}">${WEEK[(i + ctx.startOfWeek) % 7]}</th>`);
+	}
+	arr.push('</tr>');
+
+	arr.push('</thead>');
+
+	return arr.join('');
+}
+
+function renderBody (ctx: HabitTrackerContext) {
+	const startHolds = ctx.startDay >= ctx.startOfWeek ? ctx.startDay - ctx.startOfWeek : 7 - ctx.startOfWeek + ctx.startDay;
+	let days = (new Array(ctx.monthDays)).fill(0).map((v, i) => i + 1);
+	const weeks = [];
+
+	if (startHolds) {
+		const startWeekDays = 7 - startHolds;
+		const firstWeek = (new Array(startHolds)).fill('');
+		weeks.push(firstWeek.concat(days.slice(0, startWeekDays)));
+		days = days.slice(startWeekDays);
+	}
+
+	let i = 0;
+	while (i < days.length) {
+		weeks.push(days.slice(i, i + 7));
+		i = i + 7;
+	}
+
+	const lastWeek = weeks[weeks.length - 1];
+	if (lastWeek.length < 7) {
+		const pad = 7 - lastWeek.length;
+		for (let i = 0; i < pad; i++) {
+			lastWeek.push('');
 		}
 	}
 	
-	render () {
-		const head = this.genHead();
-		const body = this.genBody();
-		const styles = this.tableWidth ? `width: ${this.tableWidth};` : ''
-		this.containerEl.innerHTML = `<table class="habitt" style="${styles}">${head}${body}</table>`;
+	const html = ['<tbody>'];
+	for (let i = 0; i < weeks.length; i++) {
+		html.push('<tr>');
+		for (let j = 0; j < weeks[i].length; j++) {
+			const d = weeks[i][j];
+			const hasOwn = ctx.marks.has(d);
+			const dot = hasOwn ? `<div>${ctx.marks.get(d) || '✔️'}</div>` : '';
+			const cellContent = `<div class="habitt-c"><div class="habitt-date">${d}</div><div class="habitt-dots">${dot}</div></div>`;
+			html.push(`<td class="habitt-td habitt-td--${d || 'disabled'} ${hasOwn ? 'habitt-td--checked' : ''}">${cellContent}</td>`);
+		}
+		html.push('</tr>');
 	}
 
-	genHead () {
-		const { Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday } = this.plugin.settings
-		const WEEK = [Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday]
-		const arr = ['<thead>']
-		if (this.plugin.settings.displayHead) {
-			arr.push(`<tr><th colspan="7" class="habitt-head">${this.displayMonth}</th></tr>`)
-		}
-		arr.push(`<tr>`)
-		for (var i = 0; i < 7; i++) {
-			arr.push(`<th class="habitt-th habitt-th-${i}">${WEEK[(i + this.startOfWeek) % 7]}</th>`)
-		}
-		arr.push('</tr>')
-		arr.push('</thead>')
-		return arr.join('')
-	}
+	html.push('</tbody>');
 
-	genBody () {
-		const startHolds = this.startDay >= this.startOfWeek ? this.startDay - this.startOfWeek : 7 - this.startOfWeek + this.startDay;
-		let days = (new Array(this.monthDays)).fill(0).map((v, i) => i + 1)
-		const weeks = []
-		if (startHolds) {
-			const startWeekDays = 7 - startHolds
-			const firstWeek = (new Array(startHolds)).fill('')
-			weeks.push(firstWeek.concat(days.slice(0, startWeekDays)))
-			days = days.slice(startWeekDays)
-		}
-		let i = 0;
-		while (i < days.length) {
-			weeks.push(days.slice(i, i + 7))
-			i = i + 7
-		}
-		const lastWeek = weeks[weeks.length - 1]
-		if (lastWeek.length < 7) {
-			const pad = 7 - lastWeek.length
-			for (let i = 0; i < pad; i++) {
-				lastWeek.push('')
-			}
-		}
-		
-		const html = ['<tbody>']
-		for (let i = 0; i < weeks.length; i++) {
-			html.push('<tr>')
-			for (let j = 0; j < weeks[i].length; j++) {
-				const d = weeks[i][j]
-				const hasOwn = this.marks.has(d)
-				const dot = hasOwn ? `<div>${this.marks.get(d) || '✔️'}</div>` : ''
-				const cellContent = `<div class="habitt-c"><div class="habitt-date">${d}</div><div class="habitt-dots">${dot}</div></div>`
-				html.push(`<td class="habitt-td habitt-td--${d || 'disabled'} ${hasOwn ? 'habitt-td--checked' : ''}">${cellContent}</td>`)
-			}
-			html.push('</tr>')
-		}
-		html.push('</tbody>')
-		return html.join('')
-	}
+	return html.join('');
 }
 
 class HabitTrackerSettingTab extends PluginSettingTab {
