@@ -69,6 +69,7 @@ function renderTable (source: string, plugin: HabitTrackerPlugin) {
 
   const styles = ctx.tableWidth ? `width: ${ctx.tableWidth};` : '';
   const table = createEl('table', { cls: 'habitt', attr: { style: styles }})
+  console.log('table', table)
   table.appendChild(renderHead(ctx))
   table.appendChild(renderBody(ctx))
   return table
@@ -140,18 +141,18 @@ function renderHead (ctx: HabitTrackerContext): HTMLElement {
   for (let i = 0; i < 7; i++) {
     tr.createEl('th', { cls: `habitt-th habitt-th-${i}`, text: WEEK[(i + ctx.startOfWeek) % 7] });
   }
-
+  console.log('thead', thead)
   return thead;
 }
 
 function renderBody (ctx: HabitTrackerContext): HTMLElement {
   const startHolds = ctx.startDay >= ctx.startOfWeek ? ctx.startDay - ctx.startOfWeek : 7 - ctx.startOfWeek + ctx.startDay;
   let days = (new Array(ctx.monthDays)).fill(0).map((v, i) => i + 1);
-  const weeks = [];
+  const weeks:number[][] = [];
 
   if (startHolds) {
     const startWeekDays = 7 - startHolds;
-    const firstWeek = (new Array(startHolds)).fill('');
+    const firstWeek: number[] = (new Array(startHolds)).fill(0);
     weeks.push(firstWeek.concat(days.slice(0, startWeekDays)));
     days = days.slice(startWeekDays);
   }
@@ -166,7 +167,7 @@ function renderBody (ctx: HabitTrackerContext): HTMLElement {
   if (lastWeek.length < 7) {
     const pad = 7 - lastWeek.length;
     for (let i = 0; i < pad; i++) {
-      lastWeek.push('');
+      lastWeek.push(0);
     }
   }
   
@@ -178,13 +179,14 @@ function renderBody (ctx: HabitTrackerContext): HTMLElement {
       const hasOwn = ctx.marks.has(d);
       const td = tr.createEl('td', { cls: `habitt-td habitt-td--${d || 'disabled'} ${hasOwn ? 'habitt-td--checked' : ''}`});
       const div = td.createDiv({ cls: 'habitt-c' });
-      div.createDiv({ cls: 'habitt-date', text: d });
+      div.createDiv({ cls: 'habitt-date', text: `${d || ''}` });
       const dots = div.createDiv({ cls: 'habitt-dots' });
       if (hasOwn) {
         dots.createDiv({ text: ctx.marks.get(d) || '✔️' });
       }
     }
   }
+  console.log('body', tbody)
   return tbody;
 }
 
