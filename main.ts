@@ -178,7 +178,7 @@ function renderBody (ctx: HabitTrackerContext): HTMLElement {
       const hasOwn = ctx.marks.has(d);
       const td = tr.createEl('td', { cls: `habitt-td habitt-td--${d || 'disabled'} ${hasOwn ? 'habitt-td--checked' : ''}`});
       const div = td.createDiv({ cls: 'habitt-c' });
-      div.createDiv({ cls: 'habitt-date', text: d });
+      div.createDiv({ cls: 'habitt-date', text: d.toString() });
       const dots = div.createDiv({ cls: 'habitt-dots' });
       if (hasOwn) {
         dots.createDiv({ text: ctx.marks.get(d) || '✔️' });
