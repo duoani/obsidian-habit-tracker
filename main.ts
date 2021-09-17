@@ -4,6 +4,7 @@ interface HabitTrackerPluginSettings {
   startOfWeek: string;
   monthFormat: string;
   displayHead: boolean;
+  enableHTML: boolean;
   Sunday: string;
   Monday: string;
   Tuesday: string;
@@ -17,6 +18,7 @@ const DEFAULT_SETTINGS: HabitTrackerPluginSettings = {
   startOfWeek: '0',
   monthFormat: 'YYYY-MM',
   displayHead: true,
+  enableHTML: false,
   Sunday: 'SUN',
   Monday: 'MON',
   Tuesday: 'TUE',
@@ -69,7 +71,6 @@ function renderTable (source: string, plugin: HabitTrackerPlugin) {
 
   const styles = ctx.tableWidth ? `width: ${ctx.tableWidth};` : '';
   const table = createEl('table', { cls: 'habitt', attr: { style: styles }})
-  console.log('table', table)
   table.appendChild(renderHead(ctx))
   table.appendChild(renderBody(ctx))
   return table
@@ -141,7 +142,6 @@ function renderHead (ctx: HabitTrackerContext): HTMLElement {
   for (let i = 0; i < 7; i++) {
     tr.createEl('th', { cls: `habitt-th habitt-th-${i}`, text: WEEK[(i + ctx.startOfWeek) % 7] });
   }
-  console.log('thead', thead)
   return thead;
 }
 
@@ -172,6 +172,7 @@ function renderBody (ctx: HabitTrackerContext): HTMLElement {
   }
   
   const tbody = createEl('tbody');
+  const { enableHTML } = ctx.settings
   for (let i = 0; i < weeks.length; i++) {
     const tr = tbody.createEl('tr');
     for (let j = 0; j < weeks[i].length; j++) {
@@ -182,11 +183,16 @@ function renderBody (ctx: HabitTrackerContext): HTMLElement {
       div.createDiv({ cls: 'habitt-date', text: `${d || ''}` });
       const dots = div.createDiv({ cls: 'habitt-dots' });
       if (hasOwn) {
-        dots.createDiv({ text: ctx.marks.get(d) || '✔️' });
+        const input = ctx.marks.get(d) || '✔️'
+        // treat as HTML
+        if (enableHTML) {
+          dots.innerHTML = `<div>${input}</div>`
+        } else {
+          dots.createDiv({ text: input });
+        }
       }
     }
   }
-  console.log('body', tbody)
   return tbody;
 }
 
@@ -233,6 +239,18 @@ class HabitTrackerSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.displayHead)
           .onChange(async (value) => {
             this.plugin.settings.displayHead = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName('Enable HTML')
+      .setDesc('Treat your input text as HTML. Be careful, it may cause DOM injection attacks')
+      .addToggle(
+        dropdown => dropdown
+          .setValue(this.plugin.settings.enableHTML)
+          .onChange(async (value) => {
+            this.plugin.settings.enableHTML = value;
             await this.plugin.saveSettings();
           })
       );

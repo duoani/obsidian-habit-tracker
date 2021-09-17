@@ -1,6 +1,6 @@
 {
   "name": "obsidian-habit-tracker",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "This is A sample plugin for habit tracking.",
   "main": "main.js",
   "scripts": {
