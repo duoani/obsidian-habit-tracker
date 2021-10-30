@@ -1,6 +1,6 @@
 ## Obsidian Habit Tracker Plugin
 
-This plguin for [Obsidian](https://obsidian.md/) creates a simple month view for visualizing your punch records.
+This plugin for [Obsidian](https://obsidian.md/) creates a simple month view for visualizing your punch records.
 
 ![](./screemshot.png)
 
